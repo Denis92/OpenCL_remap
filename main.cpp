@@ -6,12 +6,10 @@
 #include <fstream>
 #include <string>
 #include <vector>
-//#include <iomanip>
-//#include <stdlib.h>
 
 #include <CL/cl.h>
 
-#define u_char unsigned char
+//#define u_char unsigned char
 
 #define SIZE 10
 
@@ -49,38 +47,15 @@ char * load_cl_source(const char *filename){
 	return res;
 };
 
-/*
-const char* OpenCLSource[] = {
-	"__kernel void kRemap(__global int* src, __global int* dst, __global int* map)",
-	"{",
-	" unsigned int n = get_global_id(0);",
-	" dst[n] = src[map[n]];",
-	"}"
-};*/
 
-int main(int argc, char* argv[]){
+void remapCL(Mat *src, Mat *dst, Mat *map_x, Mat *map_y){
 
-	Mat src = imread("D:\\Workspace\\cpp\\opencv_test\\tr.jpg", 1);
-	for (int i = 0; i < 1200; i++){
-		u_char buf = src.data[i];
-		//printf("%i", (int)buf);
-	}
-	printf("%i", src.rows);
-	printf("\n");
 
 	const char *fn = "CL_source.cl";
 	const char *source;
 	source = load_cl_source(fn);
-	if (!source) return EXIT_FAILURE;
+	if (!source) return;
 	//printf("%s\n", source);
-
-	int srcVec[SIZE], dstVec[SIZE], mapVec[SIZE];
-
-	for (int i = 0; i < SIZE; i++){
-		srcVec[i] = i;
-		dstVec[i] = 0;
-		mapVec[i] = i%3;
-	}
 
 	int err;                            // error code returned from api calls
 
@@ -90,7 +65,7 @@ int main(int argc, char* argv[]){
 	if (err != CL_SUCCESS){
 
 		printf("Error: Failed to create a device group!\n");
-		return EXIT_FAILURE;
+		return;
 	}
 
 	// Get a GPU device
@@ -99,29 +74,30 @@ int main(int argc, char* argv[]){
 	if (err != CL_SUCCESS){
 
 		printf("Error: Failed to create a compute context!\n");
-		return EXIT_FAILURE;
+		return;
 	}
 
 	cl_context GPUContext = clCreateContext(0, 1, &cdDevice, NULL, NULL, &err);
 	cl_command_queue cqCommandQueue = clCreateCommandQueue(GPUContext, cdDevice, 0, NULL);
 
-	cl_mem GPUSrcVector = clCreateBuffer(GPUContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(int) * SIZE, srcVec, NULL);
-	cl_mem GPUMapVector = clCreateBuffer(GPUContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(int) * SIZE, mapVec, NULL);
-	cl_mem GPUDstVector = clCreateBuffer(GPUContext, CL_MEM_WRITE_ONLY,	sizeof(int) * SIZE, NULL, NULL);
+	cl_mem GPUSrcVector = clCreateBuffer(GPUContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_uchar) * 3 * src->rows * src->cols, src->data, NULL);
+	cl_mem GPUMapXVector = clCreateBuffer(GPUContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(int) * src->rows * src->cols, map_x->data, NULL);
+	cl_mem GPUMapYVector = clCreateBuffer(GPUContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(int) * src->rows * src->cols, map_y->data, NULL);
+	cl_mem GPUDstVector = clCreateBuffer(GPUContext, CL_MEM_WRITE_ONLY, sizeof(cl_uchar) * 3 * src->rows * src->cols, NULL, NULL);
 
-	//cl_program OpenCLProgram = clCreateProgramWithSource(GPUContext, 5, OpenCLSource, NULL, NULL);
 	cl_program OpenCLProgram = clCreateProgramWithSource(GPUContext, 1, &source, NULL, NULL);
 	clBuildProgram(OpenCLProgram, 0, NULL, NULL, NULL, NULL);
 	cl_kernel OpenCLRemap = clCreateKernel(OpenCLProgram, "kRemap", NULL);
 
 	clSetKernelArg(OpenCLRemap, 0, sizeof(cl_mem), (void*)&GPUSrcVector);
 	clSetKernelArg(OpenCLRemap, 1, sizeof(cl_mem), (void*)&GPUDstVector);
-	clSetKernelArg(OpenCLRemap, 2, sizeof(cl_mem), (void*)&GPUMapVector);
+	clSetKernelArg(OpenCLRemap, 2, sizeof(cl_mem), (void*)&GPUMapXVector);
+	clSetKernelArg(OpenCLRemap, 3, sizeof(cl_mem), (void*)&GPUMapYVector);
 
-	size_t WorkSize[1] = { SIZE };
+	size_t WorkSize[1] = { src->rows * src->cols };
 	clEnqueueNDRangeKernel(cqCommandQueue, OpenCLRemap, 1, NULL, WorkSize, NULL, 0, NULL, NULL);
 
-	clEnqueueReadBuffer(cqCommandQueue, GPUDstVector, CL_TRUE, 0, SIZE * sizeof(int), dstVec, 0, NULL, NULL);
+	clEnqueueReadBuffer(cqCommandQueue, GPUDstVector, CL_TRUE, 0, sizeof(cl_uchar) * 3 * src->rows * src->cols, dst->data, 0, NULL, NULL);
 
 	clReleaseKernel(OpenCLRemap);
 	clReleaseProgram(OpenCLProgram);
@@ -129,16 +105,58 @@ int main(int argc, char* argv[]){
 	clReleaseContext(GPUContext);
 	clReleaseMemObject(GPUSrcVector);
 	clReleaseMemObject(GPUDstVector);
-	clReleaseMemObject(GPUMapVector);
+	clReleaseMemObject(GPUMapXVector);
+	clReleaseMemObject(GPUMapYVector);
 
 	delete[] source;
+}
 
-	//char *windowName = "Remap";
-	//namedWindow(windowName, CV_WINDOW_AUTOSIZE);
-	//imshow(windowName, src);
+void remapCPU(Mat *src, Mat *dst, Mat *map_x, Mat *map_y){
+	for (int j = 0; j < src->rows; j++)
+	{
+		for (int i = 0; i < src->cols; i++)
+		{
+			int src_x = map_x->at<int>(j, i);
+			int src_y = map_y->at<int>(j, i);
+			if (src_x >= src->rows || src_y >= src->cols) continue;
+			dst->at<Vec3b>(j, i) = src->at<Vec3b>(src_y, src_x);
+		}
+	}
+}
 
-	for (int i = 0; i < SIZE; i++)
-		printf("Src: %d, Dst:%d\n", srcVec[i], dstVec[i]);
+int main(int argc, char* argv[]){
+
+	Mat src, dst;
+	Mat map_x, map_y;
+
+	src = imread("..\\src.jpg", 1);
+	dst.create(src.size(), src.type());
+	map_x.create(src.size(), CV_32FC1);
+	map_y.create(src.size(), CV_32FC1);
+	for (int j = 0; j < src.rows; j++)
+	{
+		for (int i = 0; i < src.cols; i++)
+		{
+
+			dst.at<Vec3b>(j, i) = Vec3b(200, 200, 10);
+
+			if (i % 2 == 0)
+				map_x.at<int>(j, i) = i;
+			else
+				map_x.at<int>(j, i) = src.cols - i;
+
+			if (j % 2 == 0)
+				map_y.at<int>(j, i) = j;
+			else{
+				map_y.at<int>(j, i) = src.rows - j;
+			}
+		}
+	}
+
+	remapCL(&src, &dst, &map_x, &map_y);
+
+	imwrite("..\\dst.jpg", dst);
+
 
 	//--------------------------------------------------------------
 	system("PAUSE");

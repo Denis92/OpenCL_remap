@@ -1,12 +1,11 @@
-__kernel void kRemap(__global uchar* src, __global uchar* dst, __global int* map_x, __global int *map_y){
+__kernel void kRemap(__global uchar4* src, __global uchar4* dst, __global int* map_x, __global int *map_y, __global int *width){
 	unsigned int n = get_global_id(0);
 
 	int x = map_x[n];
 	int y = map_y[n];
 
-	int m = x * 626 + y;
+	int m = x * *width + y;
 
-	dst[n * 3] = src[m * 3];
-	dst[n * 3 + 1] = src[m * 3 + 1];
-	dst[n * 3 + 2] = src[m * 3 + 2];
+	dst[n] = src[m];
+	dst[n].s3 = 0;
 }

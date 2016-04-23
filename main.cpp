@@ -9,8 +9,6 @@
 
 #include <CL/cl.h>
 
-//#define u_char unsigned char
-
 #define SIZE 10
 
 using namespace cv;
@@ -31,7 +29,7 @@ char * load_cl_source(const char *filename){
 		f >> sBuf;
 		vres.push_back(sBuf);
 		vres.push_back(" ");
-		resSize += sBuf.size() + 1; // DEBUG
+		resSize += sBuf.size() + 1;
 	}
 	
 	if (!resSize) return NULL;
@@ -50,6 +48,10 @@ char * load_cl_source(const char *filename){
 
 void remapCL(Mat *src, Mat *dst, Mat *map_x, Mat *map_y){
 
+
+	Mat src_proc, dst_proc;
+	cvtColor(*src, src_proc, CV_RGB2RGBA);
+	dst_proc.create(src_proc.size(), src_proc.type());
 
 	const char *fn = "CL_source.cl";
 	const char *source;
@@ -80,10 +82,11 @@ void remapCL(Mat *src, Mat *dst, Mat *map_x, Mat *map_y){
 	cl_context GPUContext = clCreateContext(0, 1, &cdDevice, NULL, NULL, &err);
 	cl_command_queue cqCommandQueue = clCreateCommandQueue(GPUContext, cdDevice, 0, NULL);
 
-	cl_mem GPUSrcVector = clCreateBuffer(GPUContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_uchar) * 3 * src->rows * src->cols, src->data, NULL);
-	cl_mem GPUMapXVector = clCreateBuffer(GPUContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(int) * src->rows * src->cols, map_x->data, NULL);
-	cl_mem GPUMapYVector = clCreateBuffer(GPUContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(int) * src->rows * src->cols, map_y->data, NULL);
-	cl_mem GPUDstVector = clCreateBuffer(GPUContext, CL_MEM_WRITE_ONLY, sizeof(cl_uchar) * 3 * src->rows * src->cols, NULL, NULL);
+	cl_mem GPUSrcVector = clCreateBuffer(GPUContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_uchar4) * src_proc.rows * src_proc.cols, src_proc.data, NULL);
+	cl_mem GPUMapXVector = clCreateBuffer(GPUContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(int) * dst_proc.rows * dst_proc.cols, map_x->data, NULL);
+	cl_mem GPUMapYVector = clCreateBuffer(GPUContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(int) * dst_proc.rows * dst_proc.cols, map_y->data, NULL);
+	cl_mem GPUDstVector = clCreateBuffer(GPUContext, CL_MEM_WRITE_ONLY, sizeof(cl_uchar4) * dst_proc.rows * dst_proc.cols, NULL, NULL);
+	cl_mem GPUWidth = clCreateBuffer(GPUContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(int), &dst_proc.cols, NULL);
 
 	cl_program OpenCLProgram = clCreateProgramWithSource(GPUContext, 1, &source, NULL, NULL);
 	clBuildProgram(OpenCLProgram, 0, NULL, NULL, NULL, NULL);
@@ -93,11 +96,12 @@ void remapCL(Mat *src, Mat *dst, Mat *map_x, Mat *map_y){
 	clSetKernelArg(OpenCLRemap, 1, sizeof(cl_mem), (void*)&GPUDstVector);
 	clSetKernelArg(OpenCLRemap, 2, sizeof(cl_mem), (void*)&GPUMapXVector);
 	clSetKernelArg(OpenCLRemap, 3, sizeof(cl_mem), (void*)&GPUMapYVector);
+	clSetKernelArg(OpenCLRemap, 4, sizeof(cl_mem), (void*)&GPUWidth);
 
 	size_t WorkSize[1] = { src->rows * src->cols };
 	clEnqueueNDRangeKernel(cqCommandQueue, OpenCLRemap, 1, NULL, WorkSize, NULL, 0, NULL, NULL);
 
-	clEnqueueReadBuffer(cqCommandQueue, GPUDstVector, CL_TRUE, 0, sizeof(cl_uchar) * 3 * src->rows * src->cols, dst->data, 0, NULL, NULL);
+	clEnqueueReadBuffer(cqCommandQueue, GPUDstVector, CL_TRUE, 0, sizeof(cl_uchar4) * dst_proc.rows * dst_proc.cols, dst_proc.data, 0, NULL, NULL);
 
 	clReleaseKernel(OpenCLRemap);
 	clReleaseProgram(OpenCLProgram);
@@ -109,6 +113,8 @@ void remapCL(Mat *src, Mat *dst, Mat *map_x, Mat *map_y){
 	clReleaseMemObject(GPUMapYVector);
 
 	delete[] source;
+
+	cvtColor(dst_proc, *dst, CV_RGBA2RGB);
 }
 
 void remapCPU(Mat *src, Mat *dst, Mat *map_x, Mat *map_y){
@@ -133,6 +139,7 @@ int main(int argc, char* argv[]){
 	dst.create(src.size(), src.type());
 	map_x.create(src.size(), CV_32FC1);
 	map_y.create(src.size(), CV_32FC1);
+
 	for (int j = 0; j < src.rows; j++)
 	{
 		for (int i = 0; i < src.cols; i++)
@@ -150,6 +157,9 @@ int main(int argc, char* argv[]){
 			else{
 				map_y.at<int>(j, i) = src.rows - j;
 			}
+
+			//map_x.at<int>(j, i) = src.cols - i - 1;
+			//map_y.at<int>(j, i) = src.rows - j - 1;
 		}
 	}
 

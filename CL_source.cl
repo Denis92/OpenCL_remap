@@ -1,14 +1,19 @@
-__kernel void kRemap(__global uchar4* src, __global uchar4* dst, __global int* map_x, __global int *map_y){
+__kernel void kRemap(__global uchar4* src, __global uchar4* dst, __global float *map_x, __global float *map_y){
 	unsigned int ix = get_global_id(0);
 	unsigned int iy = get_global_id(1);
 	unsigned int size_x = get_global_size(0);
+	unsigned int size_y = get_global_size(1);
 
-	unsigned int n = ix * size_x + iy;
+	if ((ix >= size_x) || (iy >= size_y)) return;
 
-	int x = map_x[n];
-	int y = map_y[n];
+	unsigned int n = iy * size_x + ix;
 
-	int m = x * size_x + y;
+	uint x = (uint)map_x[n];
+	uint y = (uint)map_y[n];
+
+	if ((x >= size_x) || (y >= size_y)) return;
+
+	uint m = y * size_x + x;
 
 	dst[n] = src[m];
 

@@ -4,8 +4,6 @@ __kernel void kRemap(__global uchar4* src, __global uchar4* dst, __global float 
 	unsigned int size_x = get_global_size(0);
 	unsigned int size_y = get_global_size(1);
 
-	if ((ix >= size_x) || (iy >= size_y)) return;
-
 	unsigned int n = iy * size_x + ix;
 
 	uint x = (uint)map_x[n];

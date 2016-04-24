@@ -151,7 +151,7 @@ int main(int argc, char* argv[]){
 	Mat src, dst;
 	Mat map_x, map_y;
 
-	src = imread("..\\src.jpg", 1);
+	src = imread("..\\src2.jpg", 1);
 	dst.create(src.size(), src.type());
 	map_x.create(src.size(), CV_32FC1);
 	map_y.create(src.size(), CV_32FC1);
@@ -174,8 +174,8 @@ int main(int argc, char* argv[]){
 				map_y.at<float>(j, i) = src.rows - j;
 			}
 
-			map_x.at<float>(j, i) = src.cols - i - 1;
-			map_y.at<float>(j, i) = src.rows - j - 1;
+			//map_x.at<float>(j, i) = src.cols - i - 1;
+			//map_y.at<float>(j, i) = src.rows - j - 1;
 		}
 	}
 

@@ -174,8 +174,8 @@ int main(int argc, char* argv[]){
 				map_y.at<float>(j, i) = src.rows - j;
 			}
 
-			//map_x.at<float>(j, i) = src.cols - i - 1;
-			//map_y.at<float>(j, i) = src.rows - j - 1;
+			map_x.at<float>(j, i) = src.cols - i - 1;
+			map_y.at<float>(j, i) = src.rows - j - 1;
 		}
 	}
 

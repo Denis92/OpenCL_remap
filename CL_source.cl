@@ -9,9 +9,11 @@ __kernel void kRemap(__global uchar4* src, __global uchar4* dst, __global float 
 	uint x = (uint)map_x[n];
 	uint y = (uint)map_y[n];
 
-	if ((x >= size_x) || (y >= size_y)) return;
-
-	uint m = y * size_x + x;
+	uint m;
+	if ((x < size_x) && (y < size_y))
+		m = y * size_x + x;
+	else
+		m = n;
 
 	dst[n] = src[m];
 

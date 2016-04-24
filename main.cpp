@@ -54,7 +54,7 @@ void remapCL(Mat *src, Mat *dst, Mat *map_x, Mat *map_y){
 	dst_proc.create(src_proc.size(), src_proc.type());
 
 	const char *fn = "CL_source.cl";
-	const char *source;
+	const char *source = NULL;
 	source = load_cl_source(fn);
 	if (!source) return;
 	//printf("%s\n", source);
@@ -64,44 +64,42 @@ void remapCL(Mat *src, Mat *dst, Mat *map_x, Mat *map_y){
 	//Get an OpenCL platform
 	cl_platform_id cpPlatform;
 	err = clGetPlatformIDs(1, &cpPlatform, NULL);
-	if (err != CL_SUCCESS){
-
-		printf("Error: Failed to create a device group!\n");
-		return;
-	}
+	if (err != CL_SUCCESS) return;
 
 	// Get a GPU device
 	cl_device_id cdDevice;
 	err = clGetDeviceIDs(cpPlatform, CL_DEVICE_TYPE_GPU, 1, &cdDevice, NULL);
-	if (err != CL_SUCCESS){
-
-		printf("Error: Failed to create a compute context!\n");
-		return;
-	}
+	if (err != CL_SUCCESS) return;
 
 	cl_context GPUContext = clCreateContext(0, 1, &cdDevice, NULL, NULL, &err);
-	cl_command_queue cqCommandQueue = clCreateCommandQueue(GPUContext, cdDevice, 0, NULL);
+	cl_command_queue cqCommandQueue = clCreateCommandQueue(GPUContext, cdDevice, 0, &err);
+	if (err != CL_SUCCESS) return;
 
-	cl_mem GPUSrcVector = clCreateBuffer(GPUContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_uchar4) * src_proc.rows * src_proc.cols, src_proc.data, NULL);
-	cl_mem GPUMapXVector = clCreateBuffer(GPUContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(int) * dst_proc.rows * dst_proc.cols, map_x->data, NULL);
-	cl_mem GPUMapYVector = clCreateBuffer(GPUContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(int) * dst_proc.rows * dst_proc.cols, map_y->data, NULL);
-	cl_mem GPUDstVector = clCreateBuffer(GPUContext, CL_MEM_WRITE_ONLY, sizeof(cl_uchar4) * dst_proc.rows * dst_proc.cols, NULL, NULL);
-	cl_mem GPUWidth = clCreateBuffer(GPUContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(int), &dst_proc.cols, NULL);
+	cl_mem GPUSrcVector = clCreateBuffer(GPUContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_uchar4) * src_proc.rows * src_proc.cols, src_proc.data, &err);
+	cl_mem GPUMapXVector = clCreateBuffer(GPUContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(int) * dst_proc.rows * dst_proc.cols, map_x->data, &err);
+	cl_mem GPUMapYVector = clCreateBuffer(GPUContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(int) * dst_proc.rows * dst_proc.cols, map_y->data, &err);
+	cl_mem GPUDstVector = clCreateBuffer(GPUContext, CL_MEM_WRITE_ONLY, sizeof(cl_uchar4) * dst_proc.rows * dst_proc.cols, NULL, &err);
+	if (err != CL_SUCCESS) return;
 
-	cl_program OpenCLProgram = clCreateProgramWithSource(GPUContext, 1, &source, NULL, NULL);
-	clBuildProgram(OpenCLProgram, 0, NULL, NULL, NULL, NULL);
-	cl_kernel OpenCLRemap = clCreateKernel(OpenCLProgram, "kRemap", NULL);
+	cl_program OpenCLProgram = clCreateProgramWithSource(GPUContext, 1, &source, NULL, &err);
+	if (err != CL_SUCCESS) return;
+	err = clBuildProgram(OpenCLProgram, 0, NULL, NULL, NULL, NULL);
+	if (err != CL_SUCCESS) return;
+	cl_kernel OpenCLRemap = clCreateKernel(OpenCLProgram, "kRemap", &err);
+	if (err != CL_SUCCESS) return;
 
-	clSetKernelArg(OpenCLRemap, 0, sizeof(cl_mem), (void*)&GPUSrcVector);
-	clSetKernelArg(OpenCLRemap, 1, sizeof(cl_mem), (void*)&GPUDstVector);
-	clSetKernelArg(OpenCLRemap, 2, sizeof(cl_mem), (void*)&GPUMapXVector);
-	clSetKernelArg(OpenCLRemap, 3, sizeof(cl_mem), (void*)&GPUMapYVector);
-	clSetKernelArg(OpenCLRemap, 4, sizeof(cl_mem), (void*)&GPUWidth);
+	err = clSetKernelArg(OpenCLRemap, 0, sizeof(cl_mem), (void*)&GPUSrcVector);
+	err = clSetKernelArg(OpenCLRemap, 1, sizeof(cl_mem), (void*)&GPUDstVector);
+	err = clSetKernelArg(OpenCLRemap, 2, sizeof(cl_mem), (void*)&GPUMapXVector);
+	err = clSetKernelArg(OpenCLRemap, 3, sizeof(cl_mem), (void*)&GPUMapYVector);
+	if (err != CL_SUCCESS) return;
 
-	size_t WorkSize[1] = { src->rows * src->cols };
-	clEnqueueNDRangeKernel(cqCommandQueue, OpenCLRemap, 1, NULL, WorkSize, NULL, 0, NULL, NULL);
+	size_t WorkSize[2] = { dst->rows, dst->cols };
+	err = clEnqueueNDRangeKernel(cqCommandQueue, OpenCLRemap, 2, NULL, WorkSize, NULL, 0, NULL, NULL);
+	if (err != CL_SUCCESS) return;
 
-	clEnqueueReadBuffer(cqCommandQueue, GPUDstVector, CL_TRUE, 0, sizeof(cl_uchar4) * dst_proc.rows * dst_proc.cols, dst_proc.data, 0, NULL, NULL);
+	err = clEnqueueReadBuffer(cqCommandQueue, GPUDstVector, CL_TRUE, 0, sizeof(cl_uchar4) * dst_proc.rows * dst_proc.cols, dst_proc.data, 0, NULL, NULL);
+	if (err != CL_SUCCESS) return;
 
 	clReleaseKernel(OpenCLRemap);
 	clReleaseProgram(OpenCLProgram);

@@ -1,4 +1,4 @@
-﻿Сборка начата 23.04.2016 0:18:28.
+﻿Сборка начата 24.04.2016 11:01:08.
      1>Проект "D:\Workspace\Git\OpenCL_remap_Git\opencl_remap\opencl_remap.vcxproj" в узле 2 (целевые объекты Build).
      1>ClCompile:
          C:\Program Files\Microsoft Visual Studio 12.0\VC\bin\CL.exe /c /ZI /nologo /W3 /WX- /sdl /Od /Oy- /D WIN32 /D _DEBUG /D _CONSOLE /D _LIB /D _UNICODE /D UNICODE /Gm /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Fo"Debug\\" /Fd"Debug\vc120.pdb" /Gd /TP /analyze- /errorReport:prompt main.cpp
@@ -11,4 +11,4 @@
 
 Сборка успешно завершена.
 
-Затраченное время: 00:00:02.48
+Затраченное время: 00:00:01.99

@@ -16,5 +16,4 @@ __kernel void kRemap(__global uchar4* src, __global uchar4* dst, __global float 
 		m = n;
 
 	dst[n] = src[m];
-
 }

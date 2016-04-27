@@ -50,6 +50,8 @@ char * load_cl_source(const char *filename){
 
 void remapCL(Mat src, Mat dst, Mat map_x, Mat map_y){
 
+	unsigned int bTime, eTime;
+
 	Mat src_proc, dst_proc;
 	cvtColor(src, src_proc, CV_RGB2RGBA);
 	dst_proc.create(src_proc.size(), src_proc.type());
@@ -63,6 +65,7 @@ void remapCL(Mat src, Mat dst, Mat map_x, Mat map_y){
 
 	int err;                            // error code returned from api calls
 	
+	bTime = clock();
 	//----------------------- OpenCL calls ------------------------
 	cl_platform_id cpPlatform;
 	err = clGetPlatformIDs(1, &cpPlatform, NULL);
@@ -82,15 +85,6 @@ void remapCL(Mat src, Mat dst, Mat map_x, Mat map_y){
 	cl_mem GPUDstVector = clCreateBuffer(GPUContext, CL_MEM_WRITE_ONLY, sizeof(cl_uchar4) * dst_proc.rows * dst_proc.cols, NULL, &err);
 	if (err != CL_SUCCESS) return;
 
-	//---------------------------------------------------------------
-	/*
-	cl_image_format imgFormat;
-	imgFormat.image_channel_order = CL_RGBA;
-	imgFormat.image_channel_data_type = CL_UNORM_INT8;
-	cl_mem GPUSrcImg = clCreateImage2D(GPUContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, &imgFormat, src_proc.cols, src_proc.rows, sizeof(cl_uchar4), src_proc.data, &err);
-	*/
-	//----------------------------------------------------------------
-
 	cl_program OpenCLProgram = clCreateProgramWithSource(GPUContext, 1, &source, NULL, &err);
 	if (err != CL_SUCCESS) return;
 	err = clBuildProgram(OpenCLProgram, 0, NULL, NULL, NULL, NULL);
@@ -103,14 +97,6 @@ void remapCL(Mat src, Mat dst, Mat map_x, Mat map_y){
 	err = clSetKernelArg(OpenCLRemap, 2, sizeof(cl_mem), (void*)&GPUMapXVector);
 	err = clSetKernelArg(OpenCLRemap, 3, sizeof(cl_mem), (void*)&GPUMapYVector);
 	if (err != CL_SUCCESS) return;
-
-	//-----------------------------------------------------------
-	//err = clSetKernelArg(OpenCLRemap, 4, sizeof(cl_mem), (void*)&GPUSrcImg);
-	if (err != CL_SUCCESS) {
-		printf("srcImg Error! : %i\n", err);
-		return;
-	}
-	//-----------------------------------------------------------------------
 
 	size_t WorkSize[2] = { dst.cols, dst.rows };
 	err = clEnqueueNDRangeKernel(cqCommandQueue, OpenCLRemap, 2, NULL, WorkSize, NULL, 0, NULL, NULL);
@@ -128,6 +114,8 @@ void remapCL(Mat src, Mat dst, Mat map_x, Mat map_y){
 	clReleaseMemObject(GPUMapXVector);
 	clReleaseMemObject(GPUMapYVector);
 	//-------------------- End OpenCL -------------------------
+	eTime = clock();
+	cout << "OpenCL time: " << eTime - bTime << endl;
 	delete[] source;
 
 	cvtColor(dst_proc, dst, CV_RGBA2RGB);
@@ -174,17 +162,17 @@ int main(int argc, char* argv[]){
 				map_y.at<float>(j, i) = src.rows - j;
 			}
 
-			map_x.at<float>(j, i) = src.cols - i - 1;
-			map_y.at<float>(j, i) = src.rows - j - 1;
+			//map_x.at<float>(j, i) = src.cols - i - 1;
+			//map_y.at<float>(j, i) = src.rows - j - 1;
 		}
 	}
 
 	unsigned int b_time = clock();
-	remapCPU(src, dst, map_x, map_y);
+	//remapCPU(src, dst, map_x, map_y);
 	unsigned int cpu_time = clock();
 	remapCL(src, dst, map_x, map_y);
 	unsigned int gpu_time = clock();
-	remap(src, dst, map_x, map_y, CV_INTER_LINEAR, BORDER_CONSTANT, Scalar(0, 0, 0));
+	//remap(src, dst, map_x, map_y, CV_INTER_LINEAR, BORDER_CONSTANT, Scalar(0, 0, 0));
 	unsigned int cv_time = clock();
 	cout << "CPU time: " << cpu_time - b_time << " GPU time: " << gpu_time - cpu_time << " CV time: " << cv_time - gpu_time << endl;
 
